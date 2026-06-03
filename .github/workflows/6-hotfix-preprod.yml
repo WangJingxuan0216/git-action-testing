@@ -1,0 +1,52 @@
+name: Hotfix Pre-prod Validation (hotfix/* → release/*)
+
+# Runs pre-prod validation as soon as a hotfix PR is opened against a
+# release branch — early feedback, before the hotfix enters `release`.
+#
+# `branches` filters the BASE (target) branch (release/*). The head
+# (source) branch is enforced in the job's `if:` guard below, since
+# pull_request events can't filter on the head branch natively.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - 'release/**'
+
+# Cancel an in-flight run if the PR is updated again.
+concurrency:
+  group: hotfix-preprod-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  preprod-validate:
+    name: Preprod Validate
+    # This should be lightweight preprod validation 
+    # Only run for PRs whose SOURCE branch is a hotfix/* branch.
+    if: startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+
+    # NOTE: deliberately NO `environment:` here. This is the lightweight,
+    # auto-running pre-prod check for fast hotfix feedback. The manual
+    # approval gate lives at the release → main PR, so a hotfix isn't
+    # forced through two approvals. To add a sign-off at THIS boundary too,
+    # uncomment the block below (it will pause for the `preprod` env's
+    # required reviewers — i.e. a second approval):
+    #
+    # environment:
+    #   name: preprod
+
+    steps:
+      - name: Check out PR code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # TODO(you): replace with your real pre-prod validation
+      # (e.g. deploy to a pre-prod environment + run smoke/integration tests).
+      - name: Run pre-prod validation
+        run: |
+          echo "Pre-prod validation for hotfix PR #${{ github.event.pull_request.number }}"
+          echo "  ${{ github.head_ref }} → ${{ github.base_ref }}"

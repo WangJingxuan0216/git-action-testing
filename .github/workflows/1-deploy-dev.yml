@@ -1,0 +1,41 @@
+name: CI — feature/* → integrate/*
+
+# Triggered when a feature branch opens a PR into an integration branch.
+# `branches` filters the BASE (target) branch; the head (source) branch
+# is guarded per-job with `if:` since pull_request can't filter on it.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - 'integrate/**'
+
+concurrency:
+  group: ci-feature-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    if: startsWith(github.head_ref, 'feature/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # TODO: replace with your real linter, e.g. `pipx run ruff check .`
+      - name: Lint
+        run: echo "Linting ${{ github.head_ref }}"
+
+  unit-test:
+    name: Unit Test
+    if: startsWith(github.head_ref, 'feature/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # TODO: replace with your real unit tests, e.g. `pytest tests/unit`
+      - name: Unit tests
+        run: echo "Running unit tests"

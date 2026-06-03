@@ -1,13 +1,13 @@
 name: Release Gate (release/* → main)
 
 # Fires when a PR targeting `main` is opened, reopened, or updated.
-# `branches` filters the BASE (target) branch; the head (source) branch
-# is filtered separately in the `if:` guard below, since pull_request
-# events don't support head-branch filtering natively.
+# `branches` filters the BASE (target) branch. The head (source) branch
+# and the `hotfix` label are enforced inside the uat-validate job, since
+# pull_request events can't filter on head branch or labels natively.
+# `labeled`/`unlabeled` are included so adding or removing the `hotfix`
+# label re-runs the workflow and re-evaluates the checks.
 on:
   pull_request:
-    # `labeled`/`unlabeled` are required so that adding or removing the
-    # `hotfix` label re-runs the workflow and re-evaluates the checks.
     types: [opened, reopened, synchronize, labeled, unlabeled]
     branches:
       - main
@@ -30,32 +30,34 @@ jobs:
     # which would let non-release PRs slip into main and bypass the gate.
     runs-on: ubuntu-latest
     steps:
-      # Hard-fail (not skip) any PR whose SOURCE branch isn't release/*.
-      # This is the gatekeeper: require "UAT Validate" in branch protection
-      # and non-release PRs get a genuine ❌ that blocks the merge.
+      # GATEKEEPER: only release/* branches may merge into main. Hard-fail
+      # (exit 1) anything else — including a non-release branch that tries
+      # to sneak in with a `hotfix` label. This is checked first, before
+      # any label logic, so the label can never bypass the branch rule.
       - name: Enforce source branch is release/*
         if: ${{ !startsWith(github.head_ref, 'release/') }}
         run: |
           echo "::error::Only release/* branches may merge into main (got '${{ github.head_ref }}')."
           exit 1
 
+      # AGILE HOTFIX PATH: a release/* PR carrying the `hotfix` label skips
+      # UAT entirely. The job still succeeds, so the required check goes
+      # green automatically — only the pre-prod approval gates this PR.
+      - name: Skip UAT (hotfix label present)
+        if: ${{ contains(github.event.pull_request.labels.*.name, 'hotfix') }}
+        run: echo "Hotfix label present — skipping UAT; only the pre-prod approval gates this PR."
+
+      # NORMAL RELEASE PATH: run real UAT (only when no `hotfix` label).
       - name: Check out PR code
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'hotfix') }}
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'hotfix') }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # Hotfix PRs (carrying the `hotfix` label) take the AGILE path:
-      # UAT is skipped, so this required check auto-passes and only the
-      # pre-prod approval gate applies. A skipped *step* still lets the
-      # job report success — which is exactly "UAT not required for hotfix".
-      - name: Skip UAT (hotfix label present)
-        if: ${{ contains(github.event.pull_request.labels.*.name, 'hotfix') }}
-        run: echo "Hotfix label present — skipping UAT; only pre-prod approval gates this PR."
-
-      # Normal release PRs run the real UAT validation.
       # TODO(you): replace with your project's actual UAT checks.
       - name: Run UAT validation
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'hotfix') }}
@@ -73,7 +75,7 @@ jobs:
     # `production` environment in Settings → Environments. GitHub pauses
     # the run here until a reviewer clicks "Approve".
     environment:
-      name: production
+      name: preprod
     steps:
       - name: Check out PR code
         uses: actions/checkout@v4

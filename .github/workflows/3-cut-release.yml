@@ -1,0 +1,29 @@
+name: SIT — cut release
+# Triggered when a release is CUT, i.e. a `release/*` branch is created
+# (typically from develop). Runs the System Integration Test (SIT) suite.
+#
+# The `create` event fires for ALL branch/tag creation, so we filter to
+# release branches in the job `if:` below.
+on:
+  create:
+
+concurrency:
+  group: sit-${{ github.event.ref }}
+  cancel-in-progress: true
+
+jobs:
+  sit-test:
+    name: SIT Test
+    # Only when a *branch* named release/* was created.
+    if: ${{ github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.ref }}   # check out the newly cut release branch
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # TODO: replace with your real System Integration Test suite.
+      - name: System Integration Test (SIT)
+        run: echo "Running SIT for newly cut release branch ${{ github.event.ref }}"
