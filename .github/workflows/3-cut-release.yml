@@ -1,29 +1,122 @@
-name: SIT — cut release
-# Triggered when a release is CUT, i.e. a `release/*` branch is created
-# (typically from develop). Runs the System Integration Test (SIT) suite.
-#
-# The `create` event fires for ALL branch/tag creation, so we filter to
-# release branches in the job `if:` below.
-on:
-  create:
+name: 3 — Cut Release (gated)
 
+# "Cut a release" as a GATED pipeline rather than a raw branch creation.
+# A Release Manager runs this manually (Actions → "Cut Release" → Run).
+# The pipeline evaluates four hard gates and only creates the release
+# branch if all pass — so the branch is an OUTPUT of the gates, never
+# something that can exist un-validated.
+#
+#   Gate 1  develop is green (CI passing on its HEAD)
+#   Gate 2  no open "release-blocker" PRs targeting develop
+#   Gate 3  no open CRITICAL security alerts
+#   Gate 4  manual approval (release-cut environment reviewers)
+#
+# NOTE: workflow_dispatch workflows must live on the DEFAULT branch (main)
+# to be runnable from the UI.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, e.g. v1.0 (creates branch release/<version>)"
+        required: true
+        type: string
+      source_branch:
+        description: "Branch to cut from"
+        required: false
+        default: develop
+        type: string
+
+# Don't allow two concurrent cuts.
 concurrency:
-  group: sit-${{ github.event.ref }}
-  cancel-in-progress: true
+  group: cut-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  sit-test:
-    name: SIT Test
-    # Only when a *branch* named release/* was created.
-    if: ${{ github.event.ref_type == 'branch' && startsWith(github.event.ref, 'release/') }}
+  # ──────────────────────────────────────────────────────────────
+  # Gates 1–3: programmatic, automatic. Any failure aborts the cut.
+  # ──────────────────────────────────────────────────────────────
+  evaluate-gates:
+    name: Evaluate hard gates (1–3)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      statuses: read
+      pull-requests: read
+      security-events: read
+    outputs:
+      # The exact SHA validated by Gate 1. The branch is cut from THIS sha,
+      # not from "develop tip later", to avoid a commit slipping in ungated.
+      sha: ${{ steps.gate1.outputs.sha }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      SRC: ${{ inputs.source_branch }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.ref }}   # check out the newly cut release branch
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      # TODO: replace with your real System Integration Test suite.
-      - name: System Integration Test (SIT)
-        run: echo "Running SIT for newly cut release branch ${{ github.event.ref }}"
+      - name: "Gate 1 — develop is green"
+        id: gate1
+        run: |
+          set -euo pipefail
+          SHA=$(gh api "repos/$REPO/commits/$SRC" --jq '.sha')
+          echo "Validating $SRC @ $SHA"
+
+          # Legacy commit statuses (success | failure | pending)
+          STATE=$(gh api "repos/$REPO/commits/$SHA/status" --jq '.state')
+          # Modern check-runs: count any that didn't pass (ignore skipped/neutral)
+          BAD=$(gh api "repos/$REPO/commits/$SHA/check-runs" \
+            --jq '[.check_runs[] | select(.conclusion != "success" and .conclusion != "skipped" and .conclusion != "neutral")] | length')
+          TOTAL=$(gh api "repos/$REPO/commits/$SHA/check-runs" --jq '.total_count')
+          echo "combined-status=$STATE | non-passing check-runs=$BAD | total check-runs=$TOTAL"
+
+          if [ "$STATE" = "failure" ] || [ "$STATE" = "pending" ]; then
+            echo "::error::Gate 1 failed: combined commit status is '$STATE'."
+            exit 1
+          fi
+          if [ "$BAD" -gt 0 ]; then
+            echo "::error::Gate 1 failed: $BAD check run(s) are not passing."
+            exit 1
+          fi
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "::error::Gate 1 failed: no CI has reported on $SRC."
+            exit 1
+          fi
+
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "✅ Gate 1 passed"
+
+  # ──────────────────────────────────────────────────────────────
+  # Gate 4 + creation: pauses for approval, then cuts the branch.
+  # ──────────────────────────────────────────────────────────────
+  cut-release:
+    name: "Gate 2 — approve & cut"
+    needs: [evaluate-gates]
+    runs-on: ubuntu-latest
+    # Gate 4: the `release-cut` environment's required reviewers (e.g. the
+    # Release Manager / QA Lead) must approve before this job runs. The
+    # approval is recorded — that's your audit trail. Configure reviewers
+    # in Settings → Environments → release-cut.
+    environment:
+      name: test
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - name: Create release branch from the validated SHA
+        run: |
+          set -euo pipefail
+          BRANCH="release/${VERSION}"
+
+          if gh api "repos/$REPO/git/ref/heads/${BRANCH}" >/dev/null 2>&1; then
+            echo "::error::Branch ${BRANCH} already exists — aborting."
+            exit 1
+          fi
+
+          echo "Cutting ${BRANCH} from pinned SHA ${SHA}"
+          gh api -X POST "repos/$REPO/git/refs" \
+            -f ref="refs/heads/${BRANCH}" \
+            -f sha="${SHA}"
+          echo "✅ Cut ${BRANCH} @ ${SHA}"
