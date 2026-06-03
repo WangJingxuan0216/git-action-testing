@@ -1,0 +1,61 @@
+name: Release Gate (release/* → main)
+
+# Fires when a PR targeting `main` is opened, reopened, or updated.
+# `branches` filters the BASE (target) branch; the head (source) branch
+# is filtered separately in the `if:` guard below, since pull_request
+# events don't support head-branch filtering natively.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - main
+
+# Cancel an in-flight run if the PR is updated again, so we don't
+# queue duplicate approvals for the same PR.
+concurrency:
+  group: release-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────────────────────
+  # STAGE 1 — runs automatically. No approval needed.
+  # ──────────────────────────────────────────────────────────────
+  uat-validate:
+    name: Stage 1 · Validate
+    # Only run for PRs whose SOURCE branch matches release/*
+    if: startsWith(github.head_ref, 'release/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out PR code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # TODO(you): Implement the actual validation for stage 1.
+      # See the request below — this is where your project's checks go.
+      - name: Run validation
+        run: |
+          echo "TODO: replace with real checks"
+
+  # ──────────────────────────────────────────────────────────────
+  # STAGE 2 — gated. Waits for manual approval via the environment.
+  # ──────────────────────────────────────────────────────────────
+  preprod-promote:
+    name: Stage 2 · Promote
+    needs: [stage-1-validate]        # only starts after stage 1 succeeds
+    runs-on: ubuntu-latest
+    # ↓↓↓ THIS is the approval gate. Configure required reviewers on the
+    # `production` environment in Settings → Environments. GitHub pauses
+    # the run here until a reviewer clicks "Approve".
+    environment:
+      name: production
+    steps:
+      - name: Check out PR code
+        uses: actions/checkout@v4
+
+      - name: Promote
+        run: |
+          echo "Approved! Running stage 2 for PR #${{ github.event.pull_request.number }}"
