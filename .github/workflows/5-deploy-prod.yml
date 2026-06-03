@@ -1,0 +1,52 @@
+name: Deploy to Prod (on publish)
+
+# Triggered when a GitHub Release is published. Runs a FORCED pre-prod test
+# against the production branch (main) — the last guard on whatever is
+# actually about to ship — then deploys main to the production environment.
+#
+# Assumptions (adjust if wrong):
+#   - "publish" == a GitHub Release published event.
+#   - We validate/deploy the current tip of `main` (the production branch),
+#     not the release tag's commit. Change `ref: main` below if you'd
+#     rather ship the exact published commit.
+on:
+  release:
+    types: [published]
+
+# Never cancel an in-flight prod deploy.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  preprod-validate:
+    name: Preprod Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # TODO: replace with your real pre-prod validation
+      # (deploy to pre-prod + smoke/integration tests against main's state).
+      - name: Pre-prod validation
+        run: echo "Forced pre-prod validation of main before prod deploy"
+
+  deploy-prod:
+    name: Deploy to Prod
+    needs: [preprod-validate]      # deploy only if pre-prod validation passes
+    runs-on: ubuntu-latest
+    # Manual approval gate: configure required reviewers on the `production`
+    # environment (Settings → Environments). The deploy pauses here until
+    # approved.
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      # TODO: replace with your real production deployment.
+      - name: Deploy
+        run: echo "Deploying main to production (release ${{ github.event.release.tag_name }})"

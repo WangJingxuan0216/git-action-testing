@@ -1,0 +1,55 @@
+name: CI — integrate/* → develop
+
+# Triggered when an integration branch opens a PR into develop.
+# Heavier than the feature stage: lint + unit + automated System Test (ST).
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - develop
+
+concurrency:
+  group: ci-integrate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    if: startsWith(github.head_ref, 'integrate/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # TODO: replace with your real linter, e.g. `pipx run ruff check .`
+      - name: Lint
+        run: echo "Linting ${{ github.head_ref }}"
+
+  unit-test:
+    name: Unit Test
+    if: startsWith(github.head_ref, 'integrate/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # TODO: replace with your real unit tests, e.g. `pytest tests/unit`
+      - name: Unit tests
+        run: echo "Running unit tests"
+
+  st-test:
+    name: ST Test
+    # Automated System Test — runs after, and only if, lint + unit pass.
+    needs: [lint, unit-test]
+    if: startsWith(github.head_ref, 'integrate/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      # TODO: replace with your real automated system tests.
+      - name: System tests (ST)
+        run: echo "Running automated ST"
