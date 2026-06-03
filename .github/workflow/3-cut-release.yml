@@ -1,5 +1,4 @@
 name: 3 — Cut Release (gated)
-
 # "Cut a release" as a GATED pipeline rather than a raw branch creation.
 # A Release Manager runs this manually (Actions → "Cut Release" → Run).
 # The pipeline evaluates four hard gates and only creates the release
