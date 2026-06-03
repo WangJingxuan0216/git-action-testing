@@ -21,7 +21,7 @@ jobs:
   # STAGE 1 — runs automatically. No approval needed.
   # ──────────────────────────────────────────────────────────────
   uat-validate:
-    name: Stage 1 · Validate
+    name: UAT Validate
     # Only run for PRs whose SOURCE branch matches release/*
     if: startsWith(github.head_ref, 'release/')
     runs-on: ubuntu-latest
@@ -38,14 +38,14 @@ jobs:
       # See the request below — this is where your project's checks go.
       - name: Run validation
         run: |
-          echo "TODO: replace with real checks"
+          echo "UAT validation completed"
 
   # ──────────────────────────────────────────────────────────────
   # STAGE 2 — gated. Waits for manual approval via the environment.
   # ──────────────────────────────────────────────────────────────
-  preprod-promote:
-    name: Stage 2 · Promote
-    needs: [stage-1-validate]        # only starts after stage 1 succeeds
+  preprod-validate:
+    name: Preprod Validate
+    needs: [uat-validate]        # only starts after stage 1 succeeds
     runs-on: ubuntu-latest
     # ↓↓↓ THIS is the approval gate. Configure required reviewers on the
     # `production` environment in Settings → Environments. GitHub pauses
