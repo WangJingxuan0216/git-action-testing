@@ -12,7 +12,13 @@ on:
     branches:
       - 'release/**'
 
-# No concurrency: only one team works on release/* at a time (per design spec).
+# Pre-Prod is one-at-a-time. This STATIC `preprod` group is SHARED with the
+# preprod-validate job in 5-deploy-prod.yml — a hotfix's pre-prod test and a
+# release's pre-prod test serialize into the same lane and never overlap.
+# `cancel-in-progress: false` queues rather than cancelling an in-flight test.
+concurrency:
+  group: preprod
+  cancel-in-progress: false
 
 jobs:
   preprod-validate:

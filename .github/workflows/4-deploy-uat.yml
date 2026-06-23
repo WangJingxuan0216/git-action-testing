@@ -12,7 +12,13 @@ on:
     branches:
       - main
 
-# No concurrency: only one team works on main at a time (per design spec).
+# UAT is strictly sequential — only one version may enter UAT at a time
+# (design: "Sequential UAT constraint"). A STATIC group serializes every
+# release/* PR into one lane. `cancel-in-progress: false` queues a second
+# release behind the first rather than cancelling the in-flight UAT run.
+concurrency:
+  group: uat
+  cancel-in-progress: false
 
 jobs:
   # ──────────────────────────────────────────────────────────────
@@ -61,21 +67,25 @@ jobs:
           echo "UAT validation completed"
 
   # ──────────────────────────────────────────────────────────────
-  # STAGE 2 — gated. Waits for manual approval via the environment.
+  # STAGE 2 — gated. The UAT / BU sign-off (Branch Flow step 6.a).
   # ──────────────────────────────────────────────────────────────
-  preprod-validate:
-    name: Preprod Validate
+  uat-signoff:
+    name: UAT Sign-off (BU)
     needs: [uat-validate]        # only starts after stage 1 succeeds
     runs-on: ubuntu-latest
-    # ↓↓↓ THIS is the approval gate. Configure required reviewers on the
-    # `production` environment in Settings → Environments. GitHub pauses
-    # the run here until a reviewer clicks "Approve".
+    # ↓↓↓ THIS is the UAT sign-off gate, NOT a Pre-Prod gate. Pre-Prod
+    # validation + approval lives in 5-deploy-prod.yml (before the prod
+    # deploy). Using the `uat` environment here keeps the release→main PR
+    # to a single UAT approval and avoids a duplicate Pre-Prod approval.
+    # Configure required reviewers (Business users) on the `uat`
+    # environment in Settings → Environments; GitHub pauses here until
+    # a reviewer clicks "Approve".
     environment:
-      name: preprod
+      name: uat
     steps:
       - name: Check out PR code
         uses: actions/checkout@v4
 
-      - name: Promote
+      - name: Record UAT sign-off
         run: |
-          echo "Approved! Running stage 2 for PR #${{ github.event.pull_request.number }}"
+          echo "UAT signed off for PR #${{ github.event.pull_request.number }}"

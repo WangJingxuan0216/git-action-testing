@@ -13,15 +13,17 @@ on:
   release:
     types: [published]
 
-# Never cancel an in-flight prod deploy.
-concurrency:
-  group: deploy-prod
-  cancel-in-progress: false
-
 jobs:
   preprod-validate:
     name: Preprod Validate
     runs-on: ubuntu-latest
+    # Pre-Prod is one-at-a-time and SHARES this `preprod` lane with
+    # 6-hotfix-preprod.yml — a hotfix pre-prod test and a release's
+    # pre-prod test never run simultaneously. Job-level (not workflow-level)
+    # so the Prod deploy below sits in its own independent lane.
+    concurrency:
+      group: preprod
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -38,6 +40,12 @@ jobs:
     name: Deploy to Prod
     needs: [preprod-validate]      # deploy only if pre-prod validation passes
     runs-on: ubuntu-latest
+    # Prod is one-at-a-time in its own `prod` lane, independent of `preprod`,
+    # so a queued prod deploy never blocks an unrelated hotfix's pre-prod
+    # test. Never cancel an in-flight prod deploy.
+    concurrency:
+      group: prod
+      cancel-in-progress: false
     # Manual approval gate: configure required reviewers on the `production`
     # environment (Settings → Environments). The deploy pauses here until
     # approved.
