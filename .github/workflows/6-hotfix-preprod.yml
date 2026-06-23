@@ -12,10 +12,7 @@ on:
     branches:
       - 'release/**'
 
-# Cancel an in-flight run if the PR is updated again.
-concurrency:
-  group: hotfix-preprod-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency: only one team works on release/* at a time (per design spec).
 
 jobs:
   preprod-validate:
