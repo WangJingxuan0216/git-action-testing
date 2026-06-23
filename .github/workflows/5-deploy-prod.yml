@@ -1,0 +1,36 @@
+name: Deploy to Prod (on publish)
+
+# [GROUP B TEST COPY] sleep 45 hold added to preprod-validate for observability.
+on:
+  release:
+    types: [published]
+
+jobs:
+  preprod-validate:
+    name: Preprod Validate
+    runs-on: ubuntu-latest
+    # Pre-Prod one-at-a-time; SHARES `preprod` lane with 6-hotfix-preprod.yml.
+    concurrency:
+      group: preprod
+      cancel-in-progress: false
+    steps:
+      - name: Show concurrency key
+        run: echo "group=preprod (release=${{ github.event.release.tag_name }})"
+      - name: Hold (observability — remove after test)
+        run: sleep 45
+      - name: Pre-prod validation
+        run: echo "Forced pre-prod validation of main before prod deploy"
+
+  deploy-prod:
+    name: Deploy to Prod
+    needs: [preprod-validate]
+    runs-on: ubuntu-latest
+    # Prod one-at-a-time in its own `prod` lane, independent of `preprod`.
+    concurrency:
+      group: prod
+      cancel-in-progress: false
+    environment:
+      name: production
+    steps:
+      - name: Deploy
+        run: echo "Deploying main to production (release ${{ github.event.release.tag_name }})"

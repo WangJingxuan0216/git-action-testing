@@ -1,0 +1,26 @@
+name: Hotfix Pre-prod Validation (hotfix/* → release/*)
+
+# [GROUP B TEST COPY] sleep 45 hold added for observability.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    branches:
+      - 'release/**'
+
+# Pre-Prod one-at-a-time. STATIC `preprod` group SHARED with 5-deploy-prod.yml.
+concurrency:
+  group: preprod
+  cancel-in-progress: false
+
+jobs:
+  preprod-validate:
+    name: Preprod Validate
+    if: startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show concurrency key
+        run: echo "group=preprod (head=${{ github.head_ref }})"
+      - name: Hold (observability — remove after test)
+        run: sleep 45
+      - name: Run pre-prod validation
+        run: echo "Pre-prod validation for hotfix PR #${{ github.event.pull_request.number }}"

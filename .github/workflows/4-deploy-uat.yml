@@ -1,0 +1,44 @@
+name: Release Gate (release/* → main)
+
+# [GROUP B TEST COPY] sleep 45 hold added to uat-validate for observability.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+    branches:
+      - main
+
+# UAT is strictly sequential — STATIC group serializes every release/* PR.
+concurrency:
+  group: uat
+  cancel-in-progress: false
+
+jobs:
+  uat-validate:
+    name: UAT Validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show concurrency key
+        run: echo "group=uat (head=${{ github.head_ref }})"
+      - name: Hold (observability — remove after test)
+        run: sleep 45
+      - name: Enforce source branch is release/*
+        if: ${{ !startsWith(github.head_ref, 'release/') }}
+        run: |
+          echo "::error::Only release/* branches may merge into main (got '${{ github.head_ref }}')."
+          exit 1
+      - name: Skip UAT (hotfix label present)
+        if: ${{ contains(github.event.pull_request.labels.*.name, 'hotfix') }}
+        run: echo "Hotfix label present — skipping UAT."
+      - name: Run UAT validation
+        if: ${{ !contains(github.event.pull_request.labels.*.name, 'hotfix') }}
+        run: echo "UAT validation completed"
+
+  uat-signoff:
+    name: UAT Sign-off (BU)
+    needs: [uat-validate]
+    runs-on: ubuntu-latest
+    environment:
+      name: uat
+    steps:
+      - name: Record UAT sign-off
+        run: echo "UAT signed off for PR #${{ github.event.pull_request.number }}"
