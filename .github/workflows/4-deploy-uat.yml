@@ -41,4 +41,4 @@ jobs:
       name: uat
     steps:
       - name: Record UAT sign-off
-        run: echo "UAT signed off for PR #${{ github.event.pull_request.number }}"
+        run: echo "UAT signed off for PR ${{ github.event.pull_request.number }}"

@@ -23,4 +23,4 @@ jobs:
       - name: Hold (observability — remove after test)
         run: sleep 45
       - name: Run pre-prod validation
-        run: echo "Pre-prod validation for hotfix PR #${{ github.event.pull_request.number }}"
+        run: echo "Pre-prod validation for hotfix PR ${{ github.event.pull_request.number }}"
