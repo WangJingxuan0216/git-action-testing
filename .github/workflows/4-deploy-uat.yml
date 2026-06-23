@@ -7,9 +7,10 @@ on:
     branches:
       - main
 
-# UAT is strictly sequential — STATIC group serializes every release/* PR.
+# [GROUP C TEST] PER-BRANCH key — each release/* PR gets its OWN lane, so
+# multiple releases run UAT concurrently (the secondary "concurrent UAT" ask).
 concurrency:
-  group: uat
+  group: uat-${{ github.head_ref }}
   cancel-in-progress: false
 
 jobs:
