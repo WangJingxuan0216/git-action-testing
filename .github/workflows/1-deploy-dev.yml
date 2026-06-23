@@ -10,7 +10,7 @@ on:
       - 'integrate/**'
 
 concurrency:
-  group: ci-feature-${{ github.event.pull_request.number }}
+  group: dev-${{ github.head_ref }}
   cancel-in-progress: true
 
 jobs:
@@ -20,6 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Show concurrency key
+        run: echo "group=dev-${{ github.head_ref }}"
+      - name: Hold (observability — remove after test)
+        run: sleep 45
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"

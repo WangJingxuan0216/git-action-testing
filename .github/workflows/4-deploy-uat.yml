@@ -12,11 +12,7 @@ on:
     branches:
       - main
 
-# Cancel an in-flight run if the PR is updated again, so we don't
-# queue duplicate approvals for the same PR.
-concurrency:
-  group: release-gate-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+# No concurrency: only one team works on main at a time (per design spec).
 
 jobs:
   # ──────────────────────────────────────────────────────────────
